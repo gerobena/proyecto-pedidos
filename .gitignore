@@ -1,0 +1,17 @@
+# Secretos — nunca subir credenciales
+.streamlit/secrets.toml
+.env
+
+# Datos sensibles (parquets de JDG llevan costos y márgenes)
+data/*.parquet
+data/raw/**
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
