@@ -7,7 +7,7 @@ name: Sincronizar parquets de JDG
 on:
   schedule:
     - cron: "0 8 3 * *"   # día 3 de cada mes, 08:00 UTC (03:00 Ecuador)
-  workflow_dispatch: {}    # permite ejecutarla a mano desde la pestaña Actions
+  workflow_dispatch:       # permite ejecutarla a mano desde la pestaña Actions
 
 permissions:
   contents: write          # para commitear los parquets en este repo
