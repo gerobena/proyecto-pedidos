@@ -42,13 +42,19 @@ data/                 catálogo y parquets de JDG sincronizados (no se versionan
 .streamlit/secrets.toml   credenciales de Supabase (NO se sube al repo)
 ```
 
-## Estado
+## Estado — ✅ en producción
 
 - ✅ **Fase 1 — Esqueleto** (conexión, tablas, login con roles).
 - ✅ **Fase 2 — Flujo** (sugerido de tienda + análisis/negociación del admin).
-- ⬜ **Fase 3 — Autocompletado desde JDG.**
-- ⬜ **Fase 4 — Conciliación de factura + tablero/búsqueda.**
-- ⬜ **Fase 5 — Sincronización con JDG** (GitHub Action, día 3). *Último paso.*
+- ✅ **Fase 3 — Autocompletado desde JDG** (último precio con IVA, rotación, acción).
+- ✅ **Fase 4 — Conciliación de factura + tablero/búsqueda.**
+- ✅ **Fase 5 — Despliegue** (repo privado, Streamlit Cloud, GitHub Action día 3).
 
-**La documentación completa está en [`docs/GUIA.md`](docs/GUIA.md)** (modelo de
-datos, flujo, scripts, cómo configurar Supabase).
+App desplegada en Streamlit Cloud; la sincronización con JDG corre automática el
+día 3 de cada mes.
+
+> ⏰ **Mantenimiento:** el token `JDG_SYNC_TOKEN` de la Action **vence el 5 de
+> noviembre de 2026** — renovarlo antes (ver [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md)).
+
+**Documentación:** [`docs/GUIA.md`](docs/GUIA.md) (uso, modelo de datos, flujo) ·
+[`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md) (despliegue y mantenimiento).

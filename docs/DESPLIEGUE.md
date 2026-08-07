@@ -67,7 +67,8 @@ Para que pueda leer el repo **privado** de JDG necesita un token:
    - **Resource owner:** tu cuenta (`gerobena`).
    - **Repository access:** *Only select repositories* → `proyecto-jdg`.
    - **Permissions → Repository permissions → Contents: Read-only**.
-   - **Expiration:** lo que prefieras (recuerda renovarlo cuando venza).
+   - **Expiration:** **vence el 5 de noviembre de 2026** — renovar antes de esa
+     fecha (ver "Renovar el token" abajo).
 3. Genera y **copia el token** (se muestra una sola vez).
 
 ### Guardar el token como secret del repo de pedidos
@@ -85,6 +86,21 @@ Para que pueda leer el repo **privado** de JDG necesita un token:
 
 > La Action también corre sola cada día 3. Si algún mes JDG no cambió, no
 > commitea nada (es idempotente).
+
+### ⏰ Renovar el token — antes del **5 de noviembre de 2026**
+
+El `JDG_SYNC_TOKEN` **vence el 5 de noviembre de 2026**. Para renovarlo:
+
+1. Crea un token nuevo con los mismos pasos de arriba (fine-grained, solo
+   `proyecto-jdg`, **Contents: Read-only**).
+2. En `proyecto-pedidos` → **Settings → Secrets and variables → Actions** →
+   `JDG_SYNC_TOKEN` → **Update secret** (pega el token nuevo).
+3. Corre la Action a mano (**Actions → Run workflow**) para confirmar que sigue
+   en verde.
+
+> Si el token vence sin renovar, la Action fallará (en rojo) y los parquets
+> dejarán de actualizarse, **pero la app sigue funcionando** con los últimos
+> datos que alcanzó a sincronizar.
 
 ---
 
@@ -105,5 +121,5 @@ Copia los parquets desde `D:/Jupyter_Notebooks/proyecto-jdg/data`.
 | Dónde | Secreto | Para qué |
 |---|---|---|
 | Streamlit Cloud (app settings) | `[supabase]` url / publishable_key / secret_key | Conexión a la base |
-| GitHub repo `proyecto-pedidos` (Actions secret) | `JDG_SYNC_TOKEN` | Leer los parquets del repo de JDG |
+| GitHub repo `proyecto-pedidos` (Actions secret) | `JDG_SYNC_TOKEN` | Leer los parquets del repo de JDG. **Vence: 5 de noviembre de 2026** (renovar antes). |
 | Local | `.streamlit/secrets.toml` | Desarrollo (no se sube) |
