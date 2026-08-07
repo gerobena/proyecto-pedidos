@@ -69,7 +69,10 @@ Son idempotentes (se pueden volver a correr sin romper lo existente).
 ## 3. Modelo de datos
 
 ### `proveedores`
-Catálogo de proveedores: `nombre`, `ruc`, `dias_credito_habitual`.
+Catálogo de proveedores: `nombre`, `ruc`, `dias_credito_habitual`. Al crear un
+pedido, la tienda elige de la **lista de proveedores de JDG** (columna
+`PROVEEDOR`); el proveedor elegido se guarda en esta tabla la primera vez que se
+usa (`obtener_o_crear_proveedor`). También se puede registrar uno nuevo a mano.
 
 ### `pedidos` (cabecera)
 Un pedido por cita con un proveedor.
@@ -169,6 +172,7 @@ Se corren con `.venv\Scripts\python.exe scripts\<archivo>`:
 | `probar_flujo_admin.py` | Prueba el flujo tienda → análisis → enviado. |
 | `probar_negociacion.py` | Prueba ajuste de precio final + producto agregado. |
 | `probar_autocompletado.py` | Prueba que un código se autocompleta desde JDG. |
+| `probar_conciliacion.py` | Prueba la conciliación de factura y el cierre del pedido. |
 
 Los scripts `probar_*` crean datos de prueba y **los borran al final**.
 
@@ -184,8 +188,10 @@ Los scripts `probar_*` crean datos de prueba y **los borran al final**.
   descripción, último precio de compra (con IVA) y la casilla de IVA; y un panel
   de apoyo muestra rotación, antigüedad, GMROI y acción. Los datos vienen de
   `data/summary.parquet` (se traen con `scripts/sincronizar_jdg.py`).
-- ⬜ **Fase 4 — Conciliación.** Cargar el precio facturado y compararlo con el
-  precio final acordado; tablero y búsqueda por número de pedido.
+- ✅ **Fase 4 — Conciliación.** Al abrir un pedido *enviado*, el administrador
+  carga el precio facturado por línea; la app lo compara con el precio acordado
+  y marca discrepancias; luego *facturado* y *cerrado*. Tablero con búsqueda por
+  número/estado/proveedor (ambos roles) y detalle del pedido.
 - ⬜ **Fase 5 — Sincronización con JDG.** GitHub Action programada (día 3) que
   copia los parquets de JDG al proyecto de pedidos. *Último paso.*
 

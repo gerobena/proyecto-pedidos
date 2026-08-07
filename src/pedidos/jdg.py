@@ -111,6 +111,18 @@ def buscar(codigos) -> pd.DataFrame:
     return df[df["CODIGO"].isin(cods)]
 
 
+def proveedores() -> list[str]:
+    """Nombres de proveedores conocidos por JDG (para elegir sin re-crear)."""
+    if not disponible():
+        return []
+    df = _cargar()
+    if "PROVEEDOR" not in df.columns:
+        return []
+    s = df["PROVEEDOR"].dropna().astype(str).str.strip()
+    s = s[s != ""]
+    return sorted(s.unique().tolist())
+
+
 def completar(
     codigo: str | None,
     descripcion: str | None,

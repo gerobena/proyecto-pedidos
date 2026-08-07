@@ -34,6 +34,24 @@ def crear_proveedor(
     return get_client().table("proveedores").insert(fila).execute().data[0]
 
 
+def obtener_o_crear_proveedor(nombre: str) -> dict:
+    """Devuelve el proveedor por nombre; si no existe en la tabla local, lo crea.
+
+    Permite elegir un proveedor de la lista de JDG sin tener que registrarlo
+    a mano: la primera vez que se usa, se guarda en la tabla local.
+    """
+    nombre = nombre.strip()
+    res = (
+        get_client()
+        .table("proveedores")
+        .select("*")
+        .eq("nombre", nombre)
+        .limit(1)
+        .execute()
+    )
+    return res.data[0] if res.data else crear_proveedor(nombre)
+
+
 # ----------------------------------------------------------------------
 # Pedidos (cabecera)
 # ----------------------------------------------------------------------

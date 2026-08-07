@@ -11,6 +11,7 @@ from . import jdg
 from . import modelo
 from . import repositorio as repo
 from . import vista_jdg
+from . import vista_tablero
 
 # Columnas que la tienda llena en el sugerido.
 COLUMNAS_ITEMS = [
@@ -138,22 +139,26 @@ def _nuevo_proveedor_expander() -> None:
 
 def _paso_crear(usuario: dict) -> None:
     st.subheader("1) Datos de la cita")
-    proveedores = repo.listar_proveedores()
-    if not proveedores:
-        st.warning("No hay proveedores todavía. Registra uno abajo.")
+    # Lista de proveedores: los que ya conoce JDG + los guardados en local.
+    nombres_jdg = jdg.proveedores()
+    nombres_local = [p["nombre"] for p in repo.listar_proveedores()]
+    nombres = sorted({*nombres_jdg, *nombres_local})
+
+    if not nombres:
+        st.warning("No hay proveedores. Registra uno abajo.")
     else:
-        opciones = {p["id"]: p["nombre"] for p in proveedores}
-        prov_id = st.selectbox(
-            "Proveedor",
-            options=list(opciones.keys()),
-            format_func=lambda i: opciones[i],
-        )
+        nombre = st.selectbox("Proveedor (escribe para buscar)", options=nombres)
         fecha = st.date_input("Fecha de la cita", value=date.today())
         if st.button("Crear pedido y empezar el sugerido", type="primary"):
-            pedido = repo.crear_pedido(prov_id, fecha, responsable=usuario["email"])
+            prov = repo.obtener_o_crear_proveedor(nombre)
+            pedido = repo.crear_pedido(prov["id"], fecha, responsable=usuario["email"])
             st.session_state["pedido_tienda"] = pedido
             st.rerun()
 
+    st.caption(
+        f"Se listan {len(nombres_jdg)} proveedores de JDG. Si falta alguno "
+        "(proveedor nuevo), regístralo abajo."
+    )
     _nuevo_proveedor_expander()
 
 
@@ -176,7 +181,7 @@ def _paso_sugerido(pedido: dict) -> None:
         df,
         column_config=CONFIG_COLUMNAS,
         num_rows="dynamic",
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         key=f"editor_{pedido['id']}_{version}",
     )
@@ -214,38 +219,18 @@ def _paso_sugerido(pedido: dict) -> None:
             st.rerun()
 
 
-def _mis_pedidos() -> None:
-    st.subheader("Mis pedidos")
-    pedidos = repo.listar_pedidos()
-    if not pedidos:
-        st.info("Todavía no hay pedidos.")
-        return
-    provs = _mapa_proveedores()
-    tabla = pd.DataFrame(
-        [
-            {
-                "Número": p["numero_pedido"],
-                "Proveedor": provs.get(p["proveedor_id"], "—"),
-                "Estado": modelo.etiqueta(p["estado"]),
-                "Fecha cita": p.get("fecha_cita") or "—",
-            }
-            for p in pedidos
-        ]
-    )
-    st.dataframe(tabla, use_container_width=True, hide_index=True)
-
-
 # ----------------------------------------------------------------------
 # Entrada
 # ----------------------------------------------------------------------
 def render(usuario: dict) -> None:
     st.title("📦 Pedidos JDG — Tienda")
-    seccion = st.sidebar.radio("Menú", ["Nuevo pedido", "Mis pedidos"])
+    # Un pedido abierto (nuevo o reabierto para editar) tiene prioridad.
+    if "pedido_tienda" in st.session_state:
+        _paso_sugerido(st.session_state["pedido_tienda"])
+        return
 
+    seccion = st.sidebar.radio("Menú", ["Nuevo pedido", "Buscar pedidos"])
     if seccion == "Nuevo pedido":
-        if "pedido_tienda" in st.session_state:
-            _paso_sugerido(st.session_state["pedido_tienda"])
-        else:
-            _paso_crear(usuario)
+        _paso_crear(usuario)
     else:
-        _mis_pedidos()
+        vista_tablero.render(usuario)

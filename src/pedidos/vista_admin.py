@@ -15,6 +15,7 @@ from . import jdg
 from . import modelo
 from . import repositorio as repo
 from . import vista_jdg
+from . import vista_tablero
 from .util import num, txt
 
 # Columnas de referencia (vienen de tienda / sistema): NO editables.
@@ -189,7 +190,7 @@ def _bandeja() -> None:
             for p in pedidos
         ]
     )
-    st.dataframe(tabla, use_container_width=True, hide_index=True)
+    st.dataframe(tabla, width="stretch", hide_index=True)
 
     por_numero = {p["numero_pedido"]: p["id"] for p in pedidos}
     numero = st.selectbox("Abrir pedido", options=list(por_numero.keys()))
@@ -199,9 +200,12 @@ def _bandeja() -> None:
 
 
 # ----------------------------------------------------------------------
-# Análisis de un pedido
+# Detalle de un pedido (despacha según el estado)
 # ----------------------------------------------------------------------
-def _analizar(pedido_id: int) -> None:
+TOL_DISCREPANCIA = 0.01  # tolerancia en dólares al comparar facturado vs acordado
+
+
+def _detalle(pedido_id: int) -> None:
     pedido = repo.obtener_pedido(pedido_id)
     if pedido is None:
         st.error("El pedido ya no existe.")
@@ -210,7 +214,7 @@ def _analizar(pedido_id: int) -> None:
 
     provs = {p["id"]: p["nombre"] for p in repo.listar_proveedores()}
 
-    if st.button("⬅️ Volver a la bandeja"):
+    if st.button("⬅️ Volver"):
         st.session_state.pop("pedido_admin_id", None)
         st.rerun()
 
@@ -221,6 +225,17 @@ def _analizar(pedido_id: int) -> None:
         f"Responsable: {pedido.get('responsable') or '—'}"
     )
 
+    estado = pedido["estado"]
+    if estado in ("sugerido", "en_analisis"):
+        _negociacion(pedido)
+    elif estado in ("enviado", "facturado"):
+        _conciliacion(pedido)
+    else:  # cerrado
+        _readonly(pedido)
+
+
+def _negociacion(pedido: dict) -> None:
+    pedido_id = pedido["id"]
     # --- Ítems: ajustar, negociar precio y agregar productos ---
     st.markdown("#### Ítems del pedido")
     st.caption(
@@ -236,7 +251,7 @@ def _analizar(pedido_id: int) -> None:
         column_order=ORDEN_COLUMNAS,
         disabled=COLS_REFERENCIA,
         num_rows="dynamic",
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         key=f"editor_admin_{pedido_id}_{version}",
     )
@@ -307,11 +322,165 @@ def _analizar(pedido_id: int) -> None:
 
 
 # ----------------------------------------------------------------------
+# Conciliación con la factura
+# ----------------------------------------------------------------------
+_COLS_CONC_REF = [
+    "codigo",
+    "descripcion",
+    "unidades_ajustadas_admin",
+    "precio_final_acordado",
+]
+
+CONFIG_CONCILIACION = {
+    "codigo": st.column_config.TextColumn("Código"),
+    "descripcion": st.column_config.TextColumn("Descripción", width="medium"),
+    "unidades_ajustadas_admin": st.column_config.NumberColumn("Unid. finales"),
+    "precio_final_acordado": st.column_config.NumberColumn(
+        "Precio acordado", format="%.2f"
+    ),
+    "precio_facturado": st.column_config.NumberColumn(
+        "✏️ Precio facturado", format="%.2f"
+    ),
+}
+
+
+def _df_conciliacion(items: list[dict]) -> pd.DataFrame:
+    cols = ["id"] + _COLS_CONC_REF + ["precio_facturado"]
+    df = pd.DataFrame(items)
+    for c in cols:
+        if c not in df.columns:
+            df[c] = None
+    return df[cols].set_index("id")
+
+
+def _guardar_conciliacion(editado: pd.DataFrame) -> int:
+    """Guarda el precio facturado y marca discrepancias. Devuelve cuántas hay."""
+    n_disc = 0
+    for item_id, r in editado.iterrows():
+        pf = num(r.get("precio_facturado"))
+        pac = num(r.get("precio_final_acordado"))
+        flag = pf is not None and pac is not None and abs(pf - pac) > TOL_DISCREPANCIA
+        if flag:
+            n_disc += 1
+        repo.actualizar_item(
+            int(item_id),
+            {"precio_facturado": pf, "flag_discrepancia": bool(flag)},
+        )
+    return n_disc
+
+
+def _conciliacion(pedido: dict) -> None:
+    pedido_id = pedido["id"]
+    st.markdown("#### Conciliación con la factura")
+    st.caption(
+        "Carga el **precio facturado** de cada línea. La app lo compara con el "
+        "precio acordado y marca las diferencias."
+    )
+    version = st.session_state.get(f"ver_conc_{pedido_id}", 0)
+    editado = st.data_editor(
+        _df_conciliacion(repo.listar_items(pedido_id)),
+        column_config=CONFIG_CONCILIACION,
+        disabled=_COLS_CONC_REF,
+        num_rows="fixed",
+        width="stretch",
+        key=f"editor_conc_{pedido_id}_{version}",
+    )
+
+    # Totales y discrepancias (en vivo).
+    total_ac = total_fac = 0.0
+    discrepancias = []
+    for _, r in editado.iterrows():
+        u = num(r.get("unidades_ajustadas_admin")) or 0
+        pac = num(r.get("precio_final_acordado"))
+        pf = num(r.get("precio_facturado"))
+        if pac is not None:
+            total_ac += u * pac
+        if pf is not None:
+            total_fac += u * pf
+        if pf is not None and pac is not None and abs(pf - pac) > TOL_DISCREPANCIA:
+            discrepancias.append(
+                {
+                    "Código": r.get("codigo"),
+                    "Acordado": pac,
+                    "Facturado": pf,
+                    "Diferencia": round(pf - pac, 2),
+                }
+            )
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total acordado", f"${round(total_ac, 2):,.2f}")
+    m2.metric("Total facturado", f"${round(total_fac, 2):,.2f}")
+    m3.metric("Diferencia", f"${round(total_fac - total_ac, 2):,.2f}")
+
+    if discrepancias:
+        st.warning(f"{len(discrepancias)} línea(s) con precio distinto al acordado:")
+        st.dataframe(
+            pd.DataFrame(discrepancias), width="stretch", hide_index=True
+        )
+    else:
+        st.success("Sin discrepancias entre lo facturado y lo acordado.")
+
+    st.divider()
+    b1, b2 = st.columns(2)
+    with b1:
+        if st.button("💾 Guardar conciliación"):
+            nd = _guardar_conciliacion(editado)
+            st.session_state[f"ver_conc_{pedido_id}"] = version + 1
+            st.success(f"Conciliación guardada. Discrepancias: {nd}.")
+            st.rerun()
+    with b2:
+        if pedido["estado"] == "enviado":
+            if st.button("🧾 Registrar factura", type="primary"):
+                _guardar_conciliacion(editado)
+                repo.cambiar_estado(pedido_id, "facturado")
+                st.success(f"Pedido {pedido['numero_pedido']} marcado como facturado.")
+                st.rerun()
+        else:  # facturado
+            if st.button("✅ Cerrar pedido", type="primary"):
+                _guardar_conciliacion(editado)
+                repo.cambiar_estado(pedido_id, "cerrado")
+                st.session_state.pop("pedido_admin_id", None)
+                st.success(f"Pedido {pedido['numero_pedido']} cerrado.")
+                st.rerun()
+
+
+def _readonly(pedido: dict) -> None:
+    st.markdown("#### Detalle del pedido (cerrado)")
+    items = repo.listar_items(pedido["id"])
+    if not items:
+        st.info("Este pedido no tiene líneas.")
+        return
+    df = pd.DataFrame(items)
+    cols = {
+        "codigo": "Código",
+        "descripcion": "Descripción",
+        "unidades_ajustadas_admin": "Unid. finales",
+        "precio_final_acordado": "Precio final",
+        "precio_facturado": "Facturado",
+        "flag_discrepancia": "Discrepancia",
+        "total": "Total",
+    }
+    for c in cols:
+        if c not in df.columns:
+            df[c] = None
+    st.dataframe(
+        df[list(cols.keys())].rename(columns=cols),
+        width="stretch",
+        hide_index=True,
+    )
+
+
+# ----------------------------------------------------------------------
 # Entrada
 # ----------------------------------------------------------------------
 def render(usuario: dict) -> None:
     st.title("📦 Pedidos JDG — Administrador")
     if "pedido_admin_id" in st.session_state:
-        _analizar(st.session_state["pedido_admin_id"])
-    else:
+        _detalle(st.session_state["pedido_admin_id"])
+        return
+
+    seccion = st.sidebar.radio("Menú", ["Bandeja", "Tablero / búsqueda"])
+    if seccion == "Bandeja":
         _bandeja()
+    else:
+        vista_tablero.render(usuario)

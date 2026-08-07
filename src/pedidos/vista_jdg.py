@@ -40,7 +40,7 @@ def panel(codigos) -> None:
     )
     st.dataframe(
         vista,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Últ. compra": st.column_config.DateColumn(format="YYYY-MM-DD"),
