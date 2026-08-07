@@ -92,8 +92,8 @@ Un producto por fila.
 | `codigo`, `descripcion` | Tienda (o admin si agrega un producto). |
 | `unidades_sugeridas_tienda` | Tienda. |
 | `precio_proveedor` | Tienda — oferta inicial del proveedor (con IVA si aplica). |
-| `ultimo_precio_compra_sistema` | Sistema/JDG (por ahora manual; Fase 3 lo autocompleta). |
-| `iva_aplica` | Si el producto grava IVA. |
+| `ultimo_precio_compra_sistema` | **Autocompletado desde JDG**: costo de la última compra **con IVA** (`COSTO_ULT_COMPRA_CON_IVA`, dato real de la factura; para exentos iguala al sin IVA). |
+| `iva_aplica` | **Autocompletado desde JDG** (`GRAVA_IVA`): si el producto grava IVA. JDG es la autoridad. |
 | `observacion_tienda` | Tienda. |
 | `unidades_ajustadas_admin` | Admin — cantidad final a pedir. |
 | `precio_final_acordado` | Admin — precio de compra negociado. |
@@ -162,11 +162,13 @@ Se corren con `.venv\Scripts\python.exe scripts\<archivo>`:
 | Script | Para qué |
 |---|---|
 | `crear_usuario.py` | Crea un usuario (cuenta + rol). Lo corre el administrador, una vez por persona; pide la contraseña de forma oculta. |
+| `sincronizar_jdg.py` | Copia `summary.parquet` y `rendimiento.parquet` del panel JDG a `data/` (para el autocompletado). Versión manual del futuro Action. |
 | `probar_conexion.py` | Verifica que la app se conecta a Supabase. |
 | `probar_tablas.py` | Verifica que las tablas existen y responden. |
 | `probar_repositorio.py` | Prueba de humo: crea un pedido con ítems y lo borra. |
 | `probar_flujo_admin.py` | Prueba el flujo tienda → análisis → enviado. |
 | `probar_negociacion.py` | Prueba ajuste de precio final + producto agregado. |
+| `probar_autocompletado.py` | Prueba que un código se autocompleta desde JDG. |
 
 Los scripts `probar_*` crean datos de prueba y **los borran al final**.
 
@@ -178,8 +180,10 @@ Los scripts `probar_*` crean datos de prueba y **los borran al final**.
 - ✅ **Fase 2 — Flujo.** Vista de tienda (sugerido) y de administrador
   (análisis, negociación de precio final, productos agregados, condiciones,
   total en vivo, envío).
-- ⬜ **Fase 3 — Autocompletado desde JDG.** Al teclear un código, traer último
-  precio de compra, rotación y rendimiento del panel JDG.
+- ✅ **Fase 3 — Autocompletado desde JDG.** Al teclear un código se llenan
+  descripción, último precio de compra (con IVA) y la casilla de IVA; y un panel
+  de apoyo muestra rotación, antigüedad, GMROI y acción. Los datos vienen de
+  `data/summary.parquet` (se traen con `scripts/sincronizar_jdg.py`).
 - ⬜ **Fase 4 — Conciliación.** Cargar el precio facturado y compararlo con el
   precio final acordado; tablero y búsqueda por número de pedido.
 - ⬜ **Fase 5 — Sincronización con JDG.** GitHub Action programada (día 3) que

@@ -7,8 +7,10 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from . import jdg
 from . import modelo
 from . import repositorio as repo
+from . import vista_jdg
 
 # Columnas que la tienda llena en el sugerido.
 COLUMNAS_ITEMS = [
@@ -81,17 +83,23 @@ def _guardar_items(pedido_id: int, df: pd.DataFrame) -> int:
         unidades = _num(r.get("unidades_sugeridas_tienda"))
         precio_prov = _num(r.get("precio_proveedor"))
         iva = r.get("iva_aplica")
+        iva = bool(iva) if iva is not None else True
         total = round(unidades * precio_prov, 2) if unidades and precio_prov else None
+
+        # Autocompletar desde JDG: descripción, último precio (con IVA si aplica) e IVA.
+        ultimo_precio = _num(r.get("ultimo_precio_compra_sistema"))
+        descripcion, ultimo_precio, iva = jdg.completar(
+            codigo, descripcion, ultimo_precio, iva
+        )
+
         filas.append(
             {
                 "codigo": codigo,
                 "descripcion": descripcion,
                 "unidades_sugeridas_tienda": unidades,
-                "ultimo_precio_compra_sistema": _num(
-                    r.get("ultimo_precio_compra_sistema")
-                ),
+                "ultimo_precio_compra_sistema": ultimo_precio,
                 "precio_proveedor": precio_prov,
-                "iva_aplica": bool(iva) if iva is not None else True,
+                "iva_aplica": iva,
                 "total": total,
                 "observacion_tienda": _txt(r.get("observacion_tienda")),
             }
@@ -162,6 +170,7 @@ def _paso_sugerido(pedido: dict) -> None:
         "Agrega una fila por producto. El **Total** se calcula solo "
         "(unidades × precio proveedor) al guardar."
     )
+    version = st.session_state.get(f"ver_{pedido['id']}", 0)
     df = _df_items(pedido["id"])
     editado = st.data_editor(
         df,
@@ -169,14 +178,23 @@ def _paso_sugerido(pedido: dict) -> None:
         num_rows="dynamic",
         use_container_width=True,
         hide_index=True,
-        key=f"editor_{pedido['id']}",
+        key=f"editor_{pedido['id']}_{version}",
     )
+
+    with st.expander("🔎 Datos de JDG (apoyo)"):
+        st.caption(
+            "Al guardar, la descripción y el último precio se autocompletan "
+            "desde JDG para los códigos que existan."
+        )
+        vista_jdg.panel(editado["codigo"].tolist())
 
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("💾 Guardar líneas"):
             n = _guardar_items(pedido["id"], editado)
+            st.session_state[f"ver_{pedido['id']}"] = version + 1
             st.success(f"Guardadas {n} líneas.")
+            st.rerun()
     with col2:
         if st.button("📤 Enviar a análisis", type="primary"):
             n = _guardar_items(pedido["id"], editado)

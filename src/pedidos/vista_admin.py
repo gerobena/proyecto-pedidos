@@ -11,8 +11,10 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from . import jdg
 from . import modelo
 from . import repositorio as repo
+from . import vista_jdg
 from .util import num, txt
 
 # Columnas de referencia (vienen de tienda / sistema): NO editables.
@@ -100,16 +102,23 @@ def _guardar_items(pedido_id: int, df: pd.DataFrame) -> int:
         precio = p_fin if p_fin is not None else p_prov
         total = round(unidades * precio, 2) if unidades and precio else None
 
+        # Autocompletar desde JDG: descripción, último precio (con IVA si aplica) e IVA.
+        iva = bool(iva) if iva is not None else True
+        ultimo_precio = num(r.get("ultimo_precio_compra_sistema"))
+        descripcion, ultimo_precio, iva = jdg.completar(
+            codigo, descripcion, ultimo_precio, iva
+        )
+
         filas.append(
             {
                 "codigo": codigo,
                 "descripcion": descripcion,
                 "unidades_sugeridas_tienda": u_sug,
                 "unidades_ajustadas_admin": u_fin,
-                "ultimo_precio_compra_sistema": num(r.get("ultimo_precio_compra_sistema")),
+                "ultimo_precio_compra_sistema": ultimo_precio,
                 "precio_proveedor": p_prov,
                 "precio_final_acordado": p_fin,
-                "iva_aplica": bool(iva) if iva is not None else True,
+                "iva_aplica": iva,
                 "total": total,
                 "observacion_tienda": txt(r.get("observacion_tienda")),
             }
@@ -219,6 +228,7 @@ def _analizar(pedido_id: int) -> None:
         "**precio final**, y **agregar productos nuevos** en las filas de abajo "
         "(escribe código y descripción). Lo de tienda queda de referencia."
     )
+    version = st.session_state.get(f"ver_admin_{pedido_id}", 0)
     df = _df_items(repo.listar_items(pedido_id))
     editado = st.data_editor(
         df,
@@ -228,8 +238,12 @@ def _analizar(pedido_id: int) -> None:
         num_rows="dynamic",
         use_container_width=True,
         hide_index=True,
-        key=f"editor_admin_{pedido_id}",
+        key=f"editor_admin_{pedido_id}_{version}",
     )
+
+    # --- Apoyo de JDG: rotación, antigüedad, margen, GMROI, acción ---
+    with st.expander("🔎 Análisis de JDG (rotación, rendimiento, acción)", expanded=True):
+        vista_jdg.panel(editado["codigo"].tolist())
 
     # --- Total del pedido (se recalcula en vivo con lo editado) ---
     total = _total_pedido(editado)
@@ -271,7 +285,9 @@ def _analizar(pedido_id: int) -> None:
         if st.button("💾 Guardar análisis"):
             n = _guardar_items(pedido_id, editado)
             _guardar_condiciones(pedido_id, dias, descuento, comentario)
+            st.session_state[f"ver_admin_{pedido_id}"] = version + 1
             st.success(f"Análisis guardado ({n} líneas).")
+            st.rerun()
     with a2:
         if st.button("📤 Marcar como enviado", type="primary"):
             _guardar_items(pedido_id, editado)
