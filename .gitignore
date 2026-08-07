@@ -2,8 +2,12 @@
 .streamlit/secrets.toml
 .env
 
-# Datos sensibles (parquets de JDG llevan costos y márgenes)
+# Datos sensibles (parquets de JDG llevan costos y márgenes).
+# Se versionan SOLO los dos que la app necesita (repo privado); la GitHub
+# Action los mantiene al día. Cualquier otro parquet queda fuera.
 data/*.parquet
+!data/summary.parquet
+!data/rendimiento.parquet
 data/raw/**
 
 # Python

@@ -192,8 +192,10 @@ Los scripts `probar_*` crean datos de prueba y **los borran al final**.
   carga el precio facturado por línea; la app lo compara con el precio acordado
   y marca discrepancias; luego *facturado* y *cerrado*. Tablero con búsqueda por
   número/estado/proveedor (ambos roles) y detalle del pedido.
-- ⬜ **Fase 5 — Sincronización con JDG.** GitHub Action programada (día 3) que
-  copia los parquets de JDG al proyecto de pedidos. *Último paso.*
+- 🔧 **Fase 5 — Despliegue + sincronización con JDG.** Repo privado en GitHub,
+  Streamlit Cloud (Python 3.12) y la GitHub Action del día 3 que copia los
+  parquets de JDG. Workflow y docs listos (`docs/DESPLIEGUE.md`); faltan los
+  pasos en las cuentas de GitHub/Streamlit.
 
 ---
 

@@ -1,0 +1,50 @@
+name: Sincronizar parquets de JDG
+
+# Trae summary.parquet y rendimiento.parquet del repo de JDG al repo de pedidos.
+# JDG regenera sus parquets el día 2 de cada mes; esta Action corre el día 3.
+# Al commitear, Streamlit Cloud redespliega la app con los datos frescos.
+
+on:
+  schedule:
+    - cron: "0 8 3 * *"   # día 3 de cada mes, 08:00 UTC (03:00 Ecuador)
+  workflow_dispatch: {}    # permite ejecutarla a mano desde la pestaña Actions
+
+permissions:
+  contents: write          # para commitear los parquets en este repo
+
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repo de pedidos
+        uses: actions/checkout@v4
+
+      - name: Traer los parquets desde el repo de JDG
+        uses: actions/checkout@v4
+        with:
+          repository: gerobena/proyecto-jdg
+          token: ${{ secrets.JDG_SYNC_TOKEN }}
+          path: _jdg
+          sparse-checkout: |
+            data/summary.parquet
+            data/rendimiento.parquet
+          sparse-checkout-cone-mode: false
+
+      - name: Copiar los parquets a data/
+        run: |
+          mkdir -p data
+          cp _jdg/data/summary.parquet data/summary.parquet
+          cp _jdg/data/rendimiento.parquet data/rendimiento.parquet
+          rm -rf _jdg
+
+      - name: Commitear si cambió algo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f data/summary.parquet data/rendimiento.parquet
+          if git diff --cached --quiet; then
+            echo "Sin cambios en los parquets; nada que commitear."
+          else
+            git commit -m "chore: sincroniza parquets de JDG ($(date -u +%Y-%m-%d))"
+            git push
+          fi
