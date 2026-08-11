@@ -230,19 +230,20 @@ def _buscar_producto(pid: int, actual: pd.DataFrame) -> None:
     if not jdg.disponible():
         return
     if not st.checkbox(
-        "🔎 Buscar y agregar producto por código o descripción", key=f"chk_buscar_a_{pid}"
+        "🔎 Buscar y agregar producto por descripción", key=f"chk_buscar_a_{pid}"
     ):
         return
+    st.caption("El código se puede escribir directamente en la tabla.")
     c1, c2 = st.columns([6, 1])
     with c1:
         sel = st.selectbox(
-            "Producto", options=["(elige)"] + jdg.catalogo_etiquetas(),
+            "Producto", options=["(elige)"] + jdg.descripciones(),
             key=f"buscar_a_{pid}", label_visibility="collapsed",
         )
     with c2:
         agregar = st.button("➕ Agregar", key=f"add_a_{pid}")
     if agregar:
-        cod = jdg.codigo_de_etiqueta(sel)
+        cod = jdg.codigo_de_descripcion(sel)
         if cod:
             fila = {c: None for c in ORDEN_COLUMNAS}
             fila["codigo"] = cod

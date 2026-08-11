@@ -119,30 +119,28 @@ def proveedores() -> list[str]:
 
 
 @lru_cache(maxsize=1)
-def catalogo() -> list[tuple[str, str]]:
-    """Catálogo (codigo, 'codigo — descripción') para buscar por nombre."""
+def _mapa_descripcion_codigo() -> dict[str, str]:
+    """Descripción (PRODUCTO) -> código. Si una descripción se repite, gana la primera."""
     if not disponible():
-        return []
+        return {}
     df = _cargar()
-    return [
-        (str(cod), f"{cod} — {prod}")
-        for cod, prod in zip(df["CODIGO"], df["PRODUCTO"])
-    ]
+    m: dict[str, str] = {}
+    for cod, prod in zip(df["CODIGO"], df["PRODUCTO"]):
+        if prod is not None:
+            key = str(prod).strip()
+            if key and key not in m:
+                m[key] = str(cod)
+    return m
 
 
 @lru_cache(maxsize=1)
-def catalogo_etiquetas() -> list[str]:
-    """Solo las etiquetas 'codigo — descripción' (para el selectbox)."""
-    return [lab for _, lab in catalogo()]
+def descripciones() -> list[str]:
+    """Descripciones de productos (para el buscador por nombre)."""
+    return sorted(_mapa_descripcion_codigo().keys())
 
 
-@lru_cache(maxsize=1)
-def _mapa_etiqueta_codigo() -> dict[str, str]:
-    return {lab: cod for cod, lab in catalogo()}
-
-
-def codigo_de_etiqueta(label: str | None) -> str | None:
-    return _mapa_etiqueta_codigo().get(label) if label else None
+def codigo_de_descripcion(desc: str | None) -> str | None:
+    return _mapa_descripcion_codigo().get(desc.strip()) if desc else None
 
 
 def completar(
