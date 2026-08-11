@@ -36,6 +36,8 @@ _COLS_SUMMARY = [
     "ROTACION",
     "margen_bruto_%",
     "unidades_vendidas_totales",
+    "VENTA_MENSUAL_EN_STOCK",   # unidades vendidas por mes en promedio
+    "DIAS_ESTANTERIA_VENDIDO",  # días prom. (FIFO) que tarda en venderse
 ]
 _COLS_RENDIMIENTO = ["CODIGO", "ACCION", "GMROI", "PROVEEDOR"]
 
@@ -90,6 +92,8 @@ def info(codigo: str | None) -> dict | None:
         "ultimo_precio_sin_iva": _f(r.get("COSTO_ULT_COMPRA_SIN_IVA")),
         "grava_iva": _b(r.get("GRAVA_IVA")),
         "fecha_ult_compra": r.get("FECHA_ULT_COMPRA"),
+        "unidad_prom_mes": _f(r.get("VENTA_MENSUAL_EN_STOCK")),
+        "dias_prom_venta": _f(r.get("DIAS_ESTANTERIA_VENDIDO")),
         "costo_valuacion": _f(r.get("COSTO")),  # costo de valuación (SIN IVA)
         "stock": _f(r.get("STOCK")),
         "antiguedad_dias": _f(r.get("ANTIGUEDAD_STOCK_DIAS")),
@@ -102,15 +106,6 @@ def info(codigo: str | None) -> dict | None:
     }
 
 
-def buscar(codigos) -> pd.DataFrame:
-    """Filas de JDG para una lista de códigos (para el panel de apoyo)."""
-    if not disponible():
-        return pd.DataFrame()
-    df = _cargar()
-    cods = [str(c).strip() for c in codigos if str(c).strip()]
-    return df[df["CODIGO"].isin(cods)]
-
-
 def proveedores() -> list[str]:
     """Nombres de proveedores conocidos por JDG (para elegir sin re-crear)."""
     if not disponible():
@@ -121,6 +116,33 @@ def proveedores() -> list[str]:
     s = df["PROVEEDOR"].dropna().astype(str).str.strip()
     s = s[s != ""]
     return sorted(s.unique().tolist())
+
+
+@lru_cache(maxsize=1)
+def catalogo() -> list[tuple[str, str]]:
+    """Catálogo (codigo, 'codigo — descripción') para buscar por nombre."""
+    if not disponible():
+        return []
+    df = _cargar()
+    return [
+        (str(cod), f"{cod} — {prod}")
+        for cod, prod in zip(df["CODIGO"], df["PRODUCTO"])
+    ]
+
+
+@lru_cache(maxsize=1)
+def catalogo_etiquetas() -> list[str]:
+    """Solo las etiquetas 'codigo — descripción' (para el selectbox)."""
+    return [lab for _, lab in catalogo()]
+
+
+@lru_cache(maxsize=1)
+def _mapa_etiqueta_codigo() -> dict[str, str]:
+    return {lab: cod for cod, lab in catalogo()}
+
+
+def codigo_de_etiqueta(label: str | None) -> str | None:
+    return _mapa_etiqueta_codigo().get(label) if label else None
 
 
 def completar(

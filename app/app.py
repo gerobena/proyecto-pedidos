@@ -11,9 +11,20 @@ from src.pedidos.auth import cerrar_sesion, requerir_login  # noqa: E402
 
 st.set_page_config(page_title="Pedidos JDG", page_icon="📦", layout="wide")
 
+_LOGO = Path(__file__).resolve().parent / "logo.jpg"
+
+
+def _logo_barra() -> None:
+    """Logo grande a todo el ancho de la barra lateral (igual en todas las páginas)."""
+    if _LOGO.exists():
+        st.sidebar.image(str(_LOGO), width="stretch")
+
+
+_logo_barra()
 usuario = requerir_login()
 
 with st.sidebar:
+    st.divider()
     st.markdown(f"**{usuario.get('nombre') or usuario['email']}**")
     st.caption(f"Rol: {usuario['rol']}")
     if st.button("Cerrar sesión"):

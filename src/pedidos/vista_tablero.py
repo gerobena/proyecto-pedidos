@@ -13,12 +13,10 @@ _COLS_DETALLE = {
     "descripcion": "Descripción",
     "unidades_sugeridas_tienda": "Sug. tienda",
     "unidades_ajustadas_admin": "Unid. finales",
-    "precio_proveedor": "Oferta prov.",
+    "precio_proveedor": "Precio sugerido",
     "precio_final_acordado": "Precio final",
-    "precio_facturado": "Facturado",
-    "iva_aplica": "IVA",
     "total": "Total",
-    "flag_discrepancia": "Discrepancia",
+    "comentario_admin": "Observación",
 }
 
 
@@ -43,7 +41,7 @@ def _mostrar_detalle(pedido_id: int, provs: dict) -> None:
     if cond:
         st.caption("Condiciones: " + " · ".join(cond))
     if pedido.get("comentario_admin"):
-        st.caption(f"Comentario admin: {pedido['comentario_admin']}")
+        st.markdown(f"**📝 Observación del administrador:** {pedido['comentario_admin']}")
 
     items = repo.listar_items(pedido_id)
     if not items:
@@ -113,25 +111,43 @@ def render(usuario: dict) -> None:
     por_numero = {p["numero_pedido"]: p for p in filtrados}
     numero = st.selectbox("Ver / abrir pedido", options=list(por_numero.keys()))
     sel = por_numero[numero]
-    col1, col2 = st.columns(2)
+    rol = usuario.get("rol")
+    es_sugerido = sel["estado"] == "sugerido"
+    col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("👁️ Ver detalle"):
-            _mostrar_detalle(sel["id"], provs)
+            st.session_state["tablero_detalle_id"] = sel["id"]
+            st.rerun()
     with col2:
-        rol = usuario.get("rol")
         if rol == "administrador":
-            # El administrador salta al detalle editable (según el estado).
             if st.button("✏️ Abrir para trabajar", type="primary"):
                 st.session_state["pedido_admin_id"] = sel["id"]
                 st.rerun()
-        elif rol == "tienda":
-            # La tienda solo puede reabrir para editar si está en Sugerido.
-            if sel["estado"] == "sugerido":
-                if st.button("✏️ Editar sugerido", type="primary"):
-                    st.session_state["pedido_tienda"] = sel
-                    st.rerun()
-            else:
-                st.caption(
-                    "Solo puedes editar pedidos en estado 📝 Sugerido. Si está en "
-                    "análisis, pídele al administrador que lo devuelva a tienda."
-                )
+        elif rol == "tienda" and es_sugerido:
+            if st.button("✏️ Editar sugerido", type="primary"):
+                st.session_state["pedido_tienda"] = sel
+                st.rerun()
+    with col3:
+        # Eliminar solo pedidos en Sugerido, con confirmación.
+        if es_sugerido:
+            conf = st.checkbox("Confirmar", key=f"delc_{sel['id']}")
+            if st.button("🗑️ Eliminar", disabled=not conf):
+                repo.eliminar_pedido(sel["id"])
+                st.session_state.pop("tablero_detalle_id", None)
+                st.success(f"Pedido {sel['numero_pedido']} eliminado.")
+                st.rerun()
+
+    if rol == "tienda" and not es_sugerido:
+        st.caption(
+            "Solo puedes editar/eliminar pedidos en estado 📝 Sugerido. Si está en "
+            "análisis, pídele al administrador que lo devuelva a tienda."
+        )
+
+    # Detalle a ancho completo (fuera de las columnas).
+    det_id = st.session_state.get("tablero_detalle_id")
+    if det_id is not None:
+        st.divider()
+        if st.button("Ocultar detalle"):
+            st.session_state.pop("tablero_detalle_id", None)
+            st.rerun()
+        _mostrar_detalle(det_id, provs)

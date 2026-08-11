@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.pedidos.db import get_client  # noqa: E402
+from src.pedidos.db import ejecutar, get_client  # noqa: E402
 
 TABLAS = ["proveedores", "pedidos", "pedido_items"]
 
@@ -17,7 +17,7 @@ def main() -> int:
     ok = True
     for tabla in TABLAS:
         try:
-            res = client.table(tabla).select("*", count="exact").execute()
+            res = ejecutar(client.table(tabla).select("*", count="exact"))
             print(f"  ✅ {tabla:<14} accesible — filas: {res.count}")
         except Exception as e:  # noqa: BLE001
             ok = False

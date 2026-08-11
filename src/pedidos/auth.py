@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from . import ui
 from .db import get_auth_client, get_client
 
 
@@ -48,8 +49,7 @@ def requerir_login() -> dict:
     if "usuario" in st.session_state:
         return st.session_state["usuario"]
 
-    st.title("📦 Pedidos JDG")
-    st.subheader("Iniciar sesión")
+    ui.encabezado("Iniciar sesión")
     with st.form("login"):
         email = st.text_input("Correo")
         password = st.text_input("Contraseña", type="password")

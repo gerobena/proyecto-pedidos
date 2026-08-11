@@ -1,13 +1,13 @@
 # Guía del proyecto — Pedidos JDG
 
 Aplicación para manejar el ciclo de **pedidos a proveedores** del almacén de
-Importadora JDG: del *sugerido* del responsable de tienda al *análisis* y
-*negociación* del administrador, el *envío* al proveedor y (más adelante) la
-*conciliación* con la factura de compra.
+Importadora JDG: del *sugerido* del responsable de tienda al *análisis y
+negociación* del administrador, el **cierre** del pedido y la generación de un
+**PDF** con lo acordado.
 
-Es un proyecto **separado** del panel de control JDG (`proyecto-jdg`). En el
-futuro leerá los datos de ese panel para autocompletar información de cada
-producto (último precio, rotación, rendimiento).
+Es un proyecto **separado** del panel de control JDG (`proyecto-jdg`), del que
+lee (solo lectura) el catálogo y los datos de cada producto para autocompletar
+descripción, costo de la última compra (con IVA) y métricas de rotación.
 
 ---
 
@@ -29,7 +29,7 @@ Para detenerla: **Ctrl+C** en la terminal.
 ### Entorno
 
 - Python 3.12, en un entorno virtual propio dentro de `.venv/`.
-- Dependencias en `requirements.txt` (Streamlit, Supabase, pandas, pyarrow).
+- Dependencias en `requirements.txt` (Streamlit, Supabase, pandas, pyarrow, fpdf2).
 - Para reinstalar dependencias:
   ```bash
   .venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -61,8 +61,10 @@ Se ejecutan una vez en **Supabase → SQL Editor → New query → Run**:
 | `db/001_esquema_inicial.sql` | Tablas `proveedores`, `pedidos`, `pedido_items` + numeración automática y permisos. |
 | `db/002_perfiles.sql` | Tabla `perfiles` (correo → rol). |
 | `db/003_precio_final.sql` | Columna `precio_final_acordado` en `pedido_items`. |
+| `db/004_reset_numeracion.sql` | Reinicia la numeración a `PED-AAAA-0001` (opcional, tras limpiar datos de prueba). |
 
-Son idempotentes (se pueden volver a correr sin romper lo existente).
+Los `001`–`003` son idempotentes (se pueden volver a correr sin romper lo
+existente); el `004` solo se corre cuando la tabla `pedidos` está vacía.
 
 ---
 
@@ -101,37 +103,44 @@ Un producto por fila.
 | `unidades_ajustadas_admin` | Admin — cantidad final a pedir. |
 | `precio_final_acordado` | Admin — precio de compra negociado. |
 | `total` | Se calcula: unidades finales × precio final. |
-| `precio_facturado`, `flag_discrepancia` | Admin — conciliación con la factura (Fase 4). |
+| `comentario_admin` | Admin — observación por línea. |
+| `precio_facturado`, `flag_discrepancia` | Heredadas (la conciliación se movió al sistema de facturación). |
 
-> **Precios como foto.** El `ultimo_precio_compra_sistema` y demás precios se
-> guardan tal cual el día del análisis. El pedido es un documento histórico: la
-> conciliación futura compara contra el precio del día, no contra el precio
-> actual del sistema.
+Las métricas de apoyo del administrador (**unidades prom/mes** =
+`VENTA_MENSUAL_EN_STOCK`, **días prom. de venta** = `DIAS_ESTANTERIA_VENDIDO`,
+FIFO) y la **fecha de última compra** no se guardan: se leen de JDG por código al
+mostrar la tabla.
+
+> **Precios como foto.** El `ultimo_precio_compra_sistema` (costo de la última
+> compra con IVA) y demás precios se guardan tal cual el día del análisis: el
+> pedido es un documento histórico.
 
 ---
 
 ## 4. Flujo del pedido (máquina de estados)
 
 ```
-sugerido  →  en_analisis  →  enviado  →  facturado  →  cerrado
+sugerido  →  en_analisis  →  cerrado
                   │
                   └──(devolver)──→ sugerido
 ```
 
 | Estado | Quién actúa | Qué pasa |
 |---|---|---|
-| **sugerido** | Responsable de tienda | Registra los productos y unidades sugeridas. |
-| **en_analisis** | Administrador | Ajusta unidades, negocia precio final, agrega productos, fija condiciones. |
-| **enviado** | Administrador | El pedido se confirmó al proveedor. |
-| **facturado** | Administrador | Llegó la factura (Fase 4). |
-| **cerrado** | — | Conciliado. |
+| **sugerido** | Responsable de tienda | Registra productos y unidades sugeridas. Al teclear el código, la descripción y el costo de la última compra se completan desde JDG. |
+| **en_analisis** | Administrador | Ajusta unidades, cierra el precio final, agrega productos, comenta por línea y fija condiciones. La tabla muestra métricas de JDG (unidades prom/mes y días prom. de venta). |
+| **cerrado** | Administrador | Cierra el pedido y descarga el **PDF** con lo acordado. |
+
+No hay conciliación de factura en la app: se hace en el sistema de facturación
+(la factura entra automática ahí, sin retecleo). Los estados `enviado` y
+`facturado` quedaron como *heredados* (pedidos viejos), fuera del flujo actual.
 
 Los estados válidos y las transiciones están en `src/pedidos/modelo.py`. La base
 de datos también restringe los valores posibles (CHECK).
 
 ### Roles
 - **Responsable de tienda** (`rol = tienda`): crea el pedido y el sugerido.
-- **Administrador** (`rol = administrador`): analiza, negocia y envía.
+- **Administrador** (`rol = administrador`): analiza, negocia, cierra y genera el PDF.
 
 El login usa Supabase Auth; el rol se lee de la tabla `perfiles`.
 
@@ -146,9 +155,12 @@ src/pedidos/
   auth.py                  login y roles (Supabase Auth + perfiles)
   modelo.py                estados del pedido y transiciones
   repositorio.py           TODA la lectura/escritura a la base
+  jdg.py                   lee los parquets de JDG (autocompletado y métricas)
+  pdf.py                   genera el PDF del pedido cerrado
   util.py                  utilidades (txt, num)
   vista_tienda.py          vista del responsable de tienda
   vista_admin.py           vista del administrador
+  vista_tablero.py         búsqueda y detalle de pedidos
 db/*.sql                   esquema de la base (se corre en Supabase)
 scripts/                   utilidades de línea de comando (ver abajo)
 ```
@@ -168,13 +180,6 @@ Se corren con `.venv\Scripts\python.exe scripts\<archivo>`:
 | `sincronizar_jdg.py` | Copia `summary.parquet` y `rendimiento.parquet` del panel JDG a `data/` (para el autocompletado). Versión manual del futuro Action. |
 | `probar_conexion.py` | Verifica que la app se conecta a Supabase. |
 | `probar_tablas.py` | Verifica que las tablas existen y responden. |
-| `probar_repositorio.py` | Prueba de humo: crea un pedido con ítems y lo borra. |
-| `probar_flujo_admin.py` | Prueba el flujo tienda → análisis → enviado. |
-| `probar_negociacion.py` | Prueba ajuste de precio final + producto agregado. |
-| `probar_autocompletado.py` | Prueba que un código se autocompleta desde JDG. |
-| `probar_conciliacion.py` | Prueba la conciliación de factura y el cierre del pedido. |
-
-Los scripts `probar_*` crean datos de prueba y **los borran al final**.
 
 ---
 
@@ -188,14 +193,19 @@ Los scripts `probar_*` crean datos de prueba y **los borran al final**.
   descripción, último precio de compra (con IVA) y la casilla de IVA; y un panel
   de apoyo muestra rotación, antigüedad, GMROI y acción. Los datos vienen de
   `data/summary.parquet` (se traen con `scripts/sincronizar_jdg.py`).
-- ✅ **Fase 4 — Conciliación.** Al abrir un pedido *enviado*, el administrador
-  carga el precio facturado por línea; la app lo compara con el precio acordado
-  y marca discrepancias; luego *facturado* y *cerrado*. Tablero con búsqueda por
-  número/estado/proveedor (ambos roles) y detalle del pedido.
+- ✅ **Fase 4 — Cierre + tablero.** El administrador cierra el pedido (con
+  confirmación) y descarga el **PDF** con lo acordado. Tablero con búsqueda por
+  número/estado/proveedor (ambos roles) y detalle del pedido a ancho completo.
+  *La conciliación de factura se movió al sistema de facturación, así que se
+  eliminó de la app; los estados `enviado`/`facturado` quedan como heredados.*
 - ✅ **Fase 5 — Despliegue + sincronización con JDG.** Repo privado en GitHub,
   desplegado en Streamlit Cloud (Python 3.12), y la GitHub Action del día 3 que
   trae los parquets de JDG (probada, en verde). Detalle y mantenimiento en
   `docs/DESPLIEGUE.md`.
+- ✅ **Ajustes de uso.** Buscador de producto por código o descripción (bajo una
+  casilla, para no ralentizar el tecleo), autocompletado en vivo, logo de JDG en
+  la barra lateral, y **conexión endurecida** (HTTP/1.1 + reintentos) para evitar
+  el `RemoteProtocolError` intermitente de Supabase.
 
 > ⏰ **Mantenimiento:** el token `JDG_SYNC_TOKEN` de la Action **vence el 5 de
 > noviembre de 2026** — renovarlo antes (pasos en `docs/DESPLIEGUE.md`).
@@ -204,10 +214,12 @@ Los scripts `probar_*` crean datos de prueba y **los borran al final**.
 
 ## 8. Notas y limitaciones conocidas
 
-- La numeración de pedidos no recicla números: cada creación (incluidas las
-  pruebas) consume un correlativo. Es normal.
+- La numeración de pedidos no recicla números: cada creación consume un
+  correlativo. Para empezar en `PED-AAAA-0001` tras limpiar datos de prueba,
+  correr `db/004_reset_numeracion.sql`.
 - Si el administrador **devuelve** un pedido a tienda y tienda lo **vuelve a
   guardar**, se pierden los ajustes previos del administrador (el editor de
-  tienda no muestra esas columnas). Aceptable por ahora; a revisar si molesta.
-- La app aún es abierta por URL local. Antes de desplegarla habrá que restringir
-  la audiencia (lleva costos y márgenes).
+  tienda no muestra esas columnas). Aceptable por ahora.
+- **Pendiente:** diseño para tablet/teléfono (hoy pensada para escritorio) y
+  restringir la audiencia de la app (Streamlit → Settings → Sharing), ya que
+  muestra costos y márgenes.

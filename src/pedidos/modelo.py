@@ -6,22 +6,21 @@ interfaz solo ofrezca movimientos válidos.
 """
 from __future__ import annotations
 
-ESTADOS = ["sugerido", "en_analisis", "enviado", "facturado", "cerrado"]
+ESTADOS = ["sugerido", "en_analisis", "cerrado"]
 
 ETIQUETA_ESTADO = {
     "sugerido": "📝 Sugerido",
     "en_analisis": "🔎 En análisis",
+    "cerrado": "✅ Cerrado",
+    # Estados heredados (pedidos antiguos); ya no se usan en el flujo.
     "enviado": "📤 Enviado",
     "facturado": "🧾 Facturado",
-    "cerrado": "✅ Cerrado",
 }
 
 # A qué estados se puede mover cada estado.
 TRANSICIONES = {
     "sugerido": ["en_analisis"],
-    "en_analisis": ["enviado", "sugerido"],  # el admin puede devolver a tienda
-    "enviado": ["facturado"],
-    "facturado": ["cerrado"],
+    "en_analisis": ["cerrado", "sugerido"],  # cerrar, o devolver a tienda
     "cerrado": [],
 }
 

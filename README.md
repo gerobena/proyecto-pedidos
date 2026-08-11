@@ -46,8 +46,8 @@ data/                 catálogo y parquets de JDG sincronizados (no se versionan
 
 - ✅ **Fase 1 — Esqueleto** (conexión, tablas, login con roles).
 - ✅ **Fase 2 — Flujo** (sugerido de tienda + análisis/negociación del admin).
-- ✅ **Fase 3 — Autocompletado desde JDG** (último precio con IVA, rotación, acción).
-- ✅ **Fase 4 — Conciliación de factura + tablero/búsqueda.**
+- ✅ **Fase 3 — Autocompletado desde JDG** (último precio con IVA, rotación).
+- ✅ **Fase 4 — Cierre + PDF + tablero/búsqueda.** (La conciliación se hace en el sistema de facturación.)
 - ✅ **Fase 5 — Despliegue** (repo privado, Streamlit Cloud, GitHub Action día 3).
 
 App desplegada en Streamlit Cloud; la sincronización con JDG corre automática el
